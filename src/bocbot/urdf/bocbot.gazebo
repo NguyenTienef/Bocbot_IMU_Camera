@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+<robot>
+
+  <!--skid_steer_drive_controller-->
+  <gazebo>
+   <plugin
+      filename="gz-sim-diff-drive-system"
+      name="gz::sim::systems::DiffDrive">
+
+    <!-- Left wheels -->
+    <left_joint>front_left_wheel_joint</left_joint>
+    <left_joint>back_left_wheel_joint</left_joint>
+
+    <!-- Right wheels -->
+    <right_joint>front_right_wheel_joint</right_joint>
+    <right_joint>back_right_wheel_joint</right_joint>
+
+    <!-- Bocbot wheel geometry -->
+    <wheel_separation>0.30</wheel_separation>
+    <wheel_radius>0.10</wheel_radius>
+
+    <!-- Update / odometry -->
+    <odom_publish_frequency>100</odom_publish_frequency>
+
+    <!-- Gazebo command topic -->
+    <topic>/cmd_vel</topic>
+
+    <!-- Gazebo odometry topic -->
+    <odom_topic>/odom</odom_topic>
+
+    <!-- TF topic -->
+    <tf_topic>/tf</tf_topic>
+
+    <!-- Frames -->
+    <frame_id>odom</frame_id>
+    <child_frame_id>robot_footprint</child_frame_id>
+
+  </plugin>
+
+  <!-- publishes /joint_states so robot_state_publisher can compute wheel TFs -->
+  <plugin filename="gz-sim-joint-state-publisher-system"
+          name="gz::sim::systems::JointStatePublisher">
+    <joint_name>front_left_wheel_joint</joint_name>
+    <joint_name>front_right_wheel_joint</joint_name>
+    <joint_name>back_left_wheel_joint</joint_name>
+    <joint_name>back_right_wheel_joint</joint_name>
+  </plugin>
+</gazebo>
+
+  <!-- camera -->
+  <gazebo reference="camera">
+    <sensor type="camera" name="camera_sensor">
+      <update_rate>30.0</update_rate>
+      <always_on>1</always_on>
+
+      <camera name="camera">
+        <horizontal_fov>1.3962634</horizontal_fov>
+        <image>
+          <width>800</width>
+          <height>800</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.02</near>
+          <far>300</far>
+        </clip>
+        <distortion>
+          <k1>0.0</k1>
+          <k2>0.0</k2>
+          <k3>0.0</k3>
+          <p1>0.0</p1>
+          <p2>0.0</p2>
+          <center>0.5 0.5</center>
+        </distortion>
+      </camera>
+      <topic>camera/image</topic>
+    </sensor>
+  </gazebo>
+
+  <!-- hokuyo -->
+  <gazebo reference="hokuyo">
+    <sensor type="ray" name="head_hokuyo_sensor">
+      <pose>0 0 0 0 0 0</pose>
+      <visualize>false</visualize>
+      <update_rate>40</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-1.570796</min_angle>
+            <max_angle>1.570796</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.10</min>
+          <max>30.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <!-- Noise parameters based on published spec for Hokuyo laser
+                achieving "+-30mm" accuracy at range < 10m.  A mean of 0.0m and
+                stddev of 0.01m will put 99.7% of samples within 0.03m of the true
+                reading. -->
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <update_rate>30</update_rate>
+      <topic>scan</topic>
+    </sensor>
+  </gazebo>
+
+</robot>

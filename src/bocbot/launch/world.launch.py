@@ -3,74 +3,206 @@ from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+
 import os
 import xacro
 
 
 def generate_launch_description():
-    pkg_bocbot = get_package_share_directory('bocbot')
-    pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
 
-    world_path = os.path.join(pkg_bocbot, 'worlds', 'bocbot_office.world')
-    xacro_path = os.path.join(pkg_bocbot, 'urdf', 'bocbot.urdf.xacro')
+    # ============================================================
+    # Package paths
+    # ============================================================
 
-    robot_description_config = xacro.process_file(xacro_path)
-    robot_description = {'robot_description': robot_description_config.toxml()}
+    bocbot_pkg = get_package_share_directory('bocbot')
+    ros_gz_sim_pkg = get_package_share_directory('ros_gz_sim')
 
-    gz_sim = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
-        ),
-        launch_arguments={'gz_args': f'-r {world_path}'}.items()
+    world_file = os.path.join(
+        bocbot_pkg,
+        'worlds',
+        'bocbot_office.world'
     )
+
+    xacro_file = os.path.join(
+        bocbot_pkg,
+        'urdf',
+        'bocbot.urdf.xacro'
+    )
+
+    # ============================================================
+    # Robot description
+    # ============================================================
+
+    robot_description = xacro.process_file(
+        xacro_file
+    ).toxml()
+
+    robot_description_param = {
+        'robot_description': robot_description
+    }
+
+    # ============================================================
+    # Gazebo Harmonic
+    # ============================================================
+
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                ros_gz_sim_pkg,
+                'launch',
+                'gz_sim.launch.py'
+            )
+        ),
+        launch_arguments={
+            'gz_args': f'-r {world_file}'
+        }.items()
+    )
+
+    # ============================================================
+    # Robot State Publisher
+    # ============================================================
 
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        output='screen',
-        parameters=[robot_description]
-    )
 
-    # spawn near the building's interior (world file's building was re-centered near origin)
-    spawn_entity = Node(
-        package='ros_gz_sim',
-        executable='create',
-        arguments=['-topic', 'robot_description', '-name', 'bocbot',
-                   '-x', '0.0', '-y', '0.0', '-z', '0.2'],
+        parameters=[
+            robot_description_param,
+            {
+                'use_sim_time': True
+            }
+        ],
+
         output='screen'
     )
 
-    # bridge gz topics <-> ROS 2 topics for the camera and lidar
+    # ============================================================
+    # Spawn Bocbot into Gazebo
+    # ============================================================
+
+    spawn_robot = Node(
+        package='ros_gz_sim',
+        executable='create',
+
+        arguments=[
+            '-topic', 'robot_description',
+            '-name', 'bocbot',
+
+            '-x', '0.0',
+            '-y', '0.0',
+            '-z', '0.2'
+        ],
+
+        output='screen'
+    )
+
+    # ============================================================
+    # Gazebo <-> ROS 2 bridge
+    #
+    # Camera:
+    #   Gazebo  : /camera/image
+    #   ROS 2   : /camera/image
+    #
+    # Camera info:
+    #   Gazebo  : /camera/camera_info
+    #   ROS 2   : /camera/camera_info
+    #
+    # Odometry:
+    #   Gazebo  : /odom
+    #   ROS 2   : /odom
+    #
+    # cmd_vel:
+    #   ROS 2   : /cmd_vel
+    #   Gazebo  : /cmd_vel
+    #
+    # Joint state:
+    #   Gazebo  : /world/default/model/bocbot/joint_state
+    #   ROS 2   : /joint_states
+    #
+    # TF is intentionally NOT bridged here.
+    # robot_state_publisher handles TF.
+    # ============================================================
+
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
+
         arguments=[
-            '/world/default/model/bocbot/link/camera/sensor/camera_sensor/image'
-            '@sensor_msgs/msg/Image[gz.msgs.Image',
-            '/world/default/model/bocbot/link/camera/sensor/camera_sensor/camera_info'
-            '@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-            '/world/default/model/bocbot/link/hokuyo/sensor/head_hokuyo_sensor/scan'
-            '@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
-            '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-            '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
-            '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
-            '/model/bocbot/joint_state@sensor_msgs/msg/JointState[gz.msgs.Model',
+
+            # ----------------------------------------------------
+            # Camera image
+            # Gazebo -> ROS 2
+            # ----------------------------------------------------
+
+            '/camera/image'
+            '@sensor_msgs/msg/Image'
+            '[gz.msgs.Image',
+
+            # ----------------------------------------------------
+            # Camera info
+            # Gazebo -> ROS 2
+            # ----------------------------------------------------
+
+            '/camera/camera_info'
+            '@sensor_msgs/msg/CameraInfo'
+            '[gz.msgs.CameraInfo',
+
+            # ----------------------------------------------------
+            # Odometry
+            # Gazebo -> ROS 2
+            # ----------------------------------------------------
+
+            '/odom'
+            '@nav_msgs/msg/Odometry'
+            '[gz.msgs.Odometry',
+
+            # ----------------------------------------------------
+            # Velocity command
+            # ROS 2 -> Gazebo
+            # ----------------------------------------------------
+
+            '/cmd_vel'
+            '@geometry_msgs/msg/Twist'
+            ']gz.msgs.Twist',
+
+            # ----------------------------------------------------
+            # Joint states
+            # Gazebo -> ROS 2
+            # ----------------------------------------------------
+
+            '/world/default/model/bocbot/joint_state'
+            '@sensor_msgs/msg/JointState'
+            '[gz.msgs.Model',
         ],
-        remappings=[
-            ('/world/default/model/bocbot/link/camera/sensor/camera_sensor/image',
-             '/bocbot/camera/image'),
-            ('/world/default/model/bocbot/link/camera/sensor/camera_sensor/camera_info',
-             '/bocbot/camera/camera_info'),
-            ('/world/default/model/bocbot/link/hokuyo/sensor/head_hokuyo_sensor/scan',
-             '/bocbot/scan'),
-            ('/model/bocbot/joint_state', '/joint_states'),
-        ],
+
         output='screen'
     )
 
+    # ============================================================
+    # Bocbot camera C++ node
+    # ============================================================
+
+    camera_node = Node(
+        package='bocbot',
+        executable='camera_node',
+
+        parameters=[
+            {
+                'use_sim_time': True
+            }
+        ],
+
+        output='screen'
+    )
+
+    # ============================================================
+    # Launch all
+    # ============================================================
+
     return LaunchDescription([
-        gz_sim,
+        gazebo,
         robot_state_publisher,
-        spawn_entity,
+        spawn_robot,
         bridge,
+        camera_node,
     ])

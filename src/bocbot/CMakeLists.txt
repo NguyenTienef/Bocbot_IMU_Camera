@@ -1,63 +1,142 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.8)
+
 project(bocbot)
 
-# Default to C99
-if(NOT CMAKE_C_STANDARD)
-  set(CMAKE_C_STANDARD 99)
-endif()
+# ============================================================
+# C++ standard
+# ============================================================
 
-# Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+
+# ============================================================
+# ROS 2 dependencies
+# ============================================================
+
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
 
-# Generate .urdf files from .urdf.xacro files
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+
+find_package(OpenCV REQUIRED)
+
 find_package(xacro REQUIRED)
-# Xacro files
-file(GLOB xacro_files urdf/*.urdf.xacro)
 
-foreach(it ${xacro_files})
-  # remove .xacro extension
-  string(REGEX MATCH "(.*)[.]xacro$" unused ${it})
+
+# ============================================================
+# Generate URDF from Xacro
+# ============================================================
+
+file(GLOB xacro_files
+  urdf/*.urdf.xacro
+)
+
+foreach(xacro_file ${xacro_files})
+
+  string(REGEX MATCH
+    "(.*)[.]xacro$"
+    unused
+    ${xacro_file}
+  )
+
   set(output_filename ${CMAKE_MATCH_1})
 
-  # create a rule to generate ${output_filename} from {it}
-  xacro_add_xacro_file(${it} ${output_filename})
+  xacro_add_xacro_file(
+    ${xacro_file}
+    ${output_filename}
+  )
 
-  list(APPEND urdf_files ${output_filename})
-endforeach(it)
+  list(APPEND urdf_files
+    ${output_filename}
+  )
 
-# add an abstract target to actually trigger the builds
-add_custom_target(media_files ALL DEPENDS ${urdf_files})
+endforeach()
+
+
+add_custom_target(
+  media_files ALL
+  DEPENDS ${urdf_files}
+)
+
+
+# ============================================================
+# Camera node
+# ============================================================
+
+add_executable(camera_node
+  src/camera.cpp
+)
+
+ament_target_dependencies(
+  camera_node
+  rclcpp
+  sensor_msgs
+  cv_bridge
+)
+
+target_link_libraries(
+  camera_node
+  ${OpenCV_LIBRARIES}
+)
+
+
+# ============================================================
+# Install executable
+# ============================================================
+
+install(
+  TARGETS camera_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+
+# ============================================================
+# Install package resources
+# ============================================================
+
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY urdf
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY worlds
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+
+
+# ============================================================
+# Testing
+# ============================================================
 
 if(BUILD_TESTING)
+
   find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # uncomment the line when a copyright and license is not present in all source files
-  #set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # uncomment the line when this package is not in a git repo
-  #set(ament_cmake_cpplint_FOUND TRUE)
+
   ament_lint_auto_find_test_dependencies()
+
 endif()
 
-install(DIRECTORY worlds  
-  DESTINATION share/${PROJECT_NAME})
 
-install(DIRECTORY urdf
-  DESTINATION share/${PROJECT_NAME})
+# ============================================================
+# Package
+# ============================================================
 
-install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME})
-  
 ament_package()

@@ -3,6 +3,7 @@ build/
 install/
 log/
 src/sjtu_drone_simulation/
+view_frames/
 # Python Cache
 __pycache__/
 *.py[cod]

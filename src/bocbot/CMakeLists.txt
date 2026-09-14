@@ -88,11 +88,87 @@ target_link_libraries(
 
 
 # ============================================================
-# Install executable
+# Depth Camera node
+# ============================================================
+
+add_executable(depth_camera_node
+  src/depth_cam.cpp
+)
+
+ament_target_dependencies(
+  depth_camera_node
+  rclcpp
+  sensor_msgs
+  cv_bridge
+)
+
+target_link_libraries(
+  depth_camera_node
+  ${OpenCV_LIBRARIES}
+)
+
+
+# ============================================================
+# A* Path Planning node
+# ============================================================
+
+add_executable(a_star_node
+  src/A_star.cpp
+)
+
+ament_target_dependencies(
+  a_star_node
+  rclcpp
+  nav_msgs
+  geometry_msgs
+)
+
+
+# ============================================================
+# RRT Path Planning node
+# ============================================================
+
+add_executable(rrt_node
+  src/RRT.cpp
+)
+
+ament_target_dependencies(
+  rrt_node
+  rclcpp
+  nav_msgs
+  geometry_msgs
+)
+
+
+# ============================================================
+# LIDAR SLAM node
+# ============================================================
+
+add_executable(lidar_slam_node
+  src/lidar_slam.cpp
+)
+
+ament_target_dependencies(
+  lidar_slam_node
+  rclcpp
+  sensor_msgs
+  nav_msgs
+  geometry_msgs
+  tf2_ros
+)
+
+
+# ============================================================
+# Install executables
 # ============================================================
 
 install(
-  TARGETS camera_node
+  TARGETS
+    camera_node
+    depth_camera_node
+    a_star_node
+    rrt_node
+    lidar_slam_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
